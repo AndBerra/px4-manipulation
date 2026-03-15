@@ -15,6 +15,7 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/SetPose.srv"
+  "srv/SetWaypoints.srv"
   DEPENDENCIES geometry_msgs
  )
 # ament_target_dependencies(${PROJECT_NAME} geometry_msgs)

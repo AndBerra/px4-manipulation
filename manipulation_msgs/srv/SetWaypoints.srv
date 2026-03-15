@@ -1,0 +1,5 @@
+# Request: list of poses to follow in sequence
+geometry_msgs/Pose[] waypoints
+---
+# Response: true if waypoints accepted
+bool result
