@@ -53,6 +53,7 @@
 #include "px4_msgs/msg/vehicle_status.hpp"
 #include "px4_msgs/msg/vehicle_attitude.hpp"
 #include "px4_msgs/msg/vehicle_local_position.hpp"
+#include "px4_msgs/msg/vehicle_command.hpp"
 #include "manipulation_msgs/srv/set_pose.hpp"
 
 
@@ -104,22 +105,50 @@ class Px4Manipulation : public rclcpp::Node
     void targetPoseCallback(const std::shared_ptr<manipulation_msgs::srv::SetPose::Request> request,
           std::shared_ptr<manipulation_msgs::srv::SetPose::Response> response);
 
+    /**
+     * @brief Publish a VehicleCommand to PX4
+     * @param command  MAVLink command ID
+     * @param param1   First parameter (default 0.0)
+     * @param param2   Second parameter (default 0.0)
+     */
+    void publishVehicleCommand(uint16_t command, float param1 = 0.0f, float param2 = 0.0f);
+ 
+    /**
+     * @brief Switch to offboard mode
+     */
+    void setOffboardMode();
+              
+    // Timers
     rclcpp::TimerBase::SharedPtr statusloop_timer_;
+    
+    // Publishers
     rclcpp::Publisher<px4_msgs::msg::OffboardControlMode>::SharedPtr offboard_mode_pub_;
     rclcpp::Publisher<px4_msgs::msg::VehicleAttitudeSetpoint>::SharedPtr vehicle_attitude_pub_;
+    rclcpp::Publisher<px4_msgs::msg::VehicleCommand>::SharedPtr vehicle_command_pub_;
+    
+    // Subscribers    
     rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr vehicle_status_sub_;
     rclcpp::Subscription<px4_msgs::msg::VehicleAttitude>::SharedPtr vehicle_attitude_sub_;
     rclcpp::Subscription<px4_msgs::msg::VehicleLocalPosition>::SharedPtr vehicle_local_position_sub_;
+    
+    // Services
     rclcpp::Service<manipulation_msgs::srv::SetPose>::SharedPtr pose_service_;
 
+    // Vehicle state
     uint8_t vehicle_nav_state_;
     Eigen::Quaterniond vehicle_attitude_{Eigen::Quaterniond(1.0, 0.0, 0.0, 0.0)};
     Eigen::Vector3d vehicle_position_{Eigen::Vector3d(0.0, 0.0, 0.0)};
     Eigen::Vector3d vehicle_velocity_{Eigen::Vector3d(0.0, 0.0, 0.0)};
 
+    // Reference setpoints    
     Eigen::Vector3d reference_position_{Eigen::Vector3d(0.0, 0.0, 10.0)};
     Eigen::Quaterniond reference_attitude_{Eigen::Quaterniond(1.0, 0.0, 0.0, 0.0)};
 
+    // Controller gains    
     double kp_{0.05};
     double kd_{0.05};
+
+    // Counter for delayed arm/offboard trigger
+    int loop_counter_{0};
+    static constexpr int ARMING_TRIGGER_COUNT{50};    
 };

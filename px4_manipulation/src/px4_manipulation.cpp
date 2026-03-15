@@ -43,7 +43,7 @@
 
 Px4Manipulation::Px4Manipulation() : Node("minimal_publisher") {
     
-	auto qos_profile = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
+	  auto qos_profile = rclcpp::QoS(rclcpp::KeepLast(1)).best_effort();
 
     kp_ = this->declare_parameter<double>("kp", kp_);
     kd_ = this->declare_parameter<double>("kd", kd_);
@@ -51,15 +51,17 @@ Px4Manipulation::Px4Manipulation() : Node("minimal_publisher") {
     // Publishers
     offboard_mode_pub_ = this->create_publisher<px4_msgs::msg::OffboardControlMode>("/fmu/in/offboard_control_mode", qos_profile);
     vehicle_attitude_pub_ = this->create_publisher<px4_msgs::msg::VehicleAttitudeSetpoint>("/fmu/in/vehicle_attitude_setpoint", qos_profile);
-    
+    vehicle_command_pub_ = this->create_publisher<px4_msgs::msg::VehicleCommand>("/fmu/in/vehicle_command", qos_profile);    
+
     // Subscribers
     vehicle_status_sub_ = this->create_subscription<px4_msgs::msg::VehicleStatus>(
-      "/fmu/out/vehicle_status", qos_profile, std::bind(&Px4Manipulation::vehicleStatusCallback, this, std::placeholders::_1));
+      "/fmu/out/vehicle_status_v1", qos_profile, std::bind(&Px4Manipulation::vehicleStatusCallback, this, std::placeholders::_1));
     vehicle_attitude_sub_ = this->create_subscription<px4_msgs::msg::VehicleAttitude>(
       "/fmu/out/vehicle_attitude", qos_profile, std::bind(&Px4Manipulation::vehicleAttitudeCallback, this, std::placeholders::_1));
     vehicle_local_position_sub_ = this->create_subscription<px4_msgs::msg::VehicleLocalPosition>(
       "/fmu/out/vehicle_local_position", qos_profile, std::bind(&Px4Manipulation::vehicleLocalPositionCallback, this, std::placeholders::_1));
 
+    // Services      
     pose_service_ = this->create_service<manipulation_msgs::srv::SetPose>("/set_pose", std::bind(&Px4Manipulation::targetPoseCallback, this, std::placeholders::_1, std::placeholders::_2));
 
     // Setup loop timers
@@ -69,6 +71,8 @@ Px4Manipulation::Px4Manipulation() : Node("minimal_publisher") {
 
 
 void Px4Manipulation::statusloopCallback() {
+
+    // RCLCPP_INFO(this->get_logger(), "statusloopCallback()");
 
     // Simple PID position controller
     Eigen::Vector3d error_position = vehicle_position_ - reference_position_;
@@ -94,8 +98,19 @@ void Px4Manipulation::statusloopCallback() {
     offboard_mode_pub_->publish(offboard_ctrl_mode_msg);
     // RCLCPP_INFO(this->get_logger(), "Publishing: '%s'", offboard_ctrl_mode_msg.data.c_str());
 
+    // After ~1 second of streaming the heartbeat, switch to offboard and arm
+    if (loop_counter_ < ARMING_TRIGGER_COUNT) {
+        loop_counter_++;
+    } else if (loop_counter_ == ARMING_TRIGGER_COUNT) {
+        RCLCPP_INFO(this->get_logger(), "Switching to offboard mode and arming...");
+        setOffboardMode();
+        loop_counter_++;
+    }
+
     // Publish attitude setpoints
     if (vehicle_nav_state_ == px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD) {
+      // RCLCPP_INFO(this->get_logger(), "publising attitude setpoint");
+
       px4_msgs::msg::VehicleAttitudeSetpoint attitude_setpoint_msg;
       attitude_setpoint_msg.q_d[0] = reference_attitude_.w();
       attitude_setpoint_msg.q_d[1] = reference_attitude_.x();
@@ -111,6 +126,26 @@ void Px4Manipulation::statusloopCallback() {
 void Px4Manipulation::vehicleStatusCallback(const px4_msgs::msg::VehicleStatus &msg) {
     vehicle_nav_state_ = msg.nav_state;
     // RCLCPP_INFO(this->get_logger(), "Publishing: %f", double(vehicle_nav_state_));
+}
+
+void Px4Manipulation::publishVehicleCommand(uint16_t command, float param1, float param2) {
+    px4_msgs::msg::VehicleCommand msg;
+    msg.command = command;
+    msg.param1 = param1;
+    msg.param2 = param2;
+    msg.target_system = 1;
+    msg.target_component = 1;
+    msg.source_system = 1;
+    msg.source_component = 1;
+    msg.from_external = true;
+    msg.timestamp = this->get_clock()->now().nanoseconds() / 1000;
+    vehicle_command_pub_->publish(msg);
+}
+
+void Px4Manipulation::setOffboardMode() {
+    // param1=1 (custom mode enabled), param2=6 (PX4 offboard mode)
+    publishVehicleCommand(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1.0f, 6.0f);
+    RCLCPP_INFO(this->get_logger(), "Offboard mode command sent");
 }
 
 void Px4Manipulation::vehicleAttitudeCallback(const px4_msgs::msg::VehicleAttitude &msg) {
@@ -134,6 +169,9 @@ void Px4Manipulation::vehicleLocalPositionCallback(const px4_msgs::msg::VehicleL
 
 void Px4Manipulation::targetPoseCallback(const std::shared_ptr<manipulation_msgs::srv::SetPose::Request> request,
           std::shared_ptr<manipulation_msgs::srv::SetPose::Response> response) {
+
+  // RCLCPP_INFO(this->get_logger(), "targetPoseCallback()");
+
   reference_position_.x() = request->pose.position.x;
   reference_position_.y() = request->pose.position.y;
   reference_position_.z() = request->pose.position.z;
