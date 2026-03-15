@@ -119,4 +119,7 @@ class Px4Manipulation : public rclcpp::Node
 
     Eigen::Vector3d reference_position_{Eigen::Vector3d(0.0, 0.0, 10.0)};
     Eigen::Quaterniond reference_attitude_{Eigen::Quaterniond(1.0, 0.0, 0.0, 0.0)};
+
+    double kp_{0.05};
+    double kd_{0.05};
 };
