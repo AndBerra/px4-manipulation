@@ -124,6 +124,13 @@ void Px4Manipulation::statusloopCallback() {
 }
 
 void Px4Manipulation::vehicleStatusCallback(const px4_msgs::msg::VehicleStatus &msg) {
+    if (msg.nav_state == px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD &&
+        vehicle_nav_state_ != px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD) {
+        reference_position_ = vehicle_position_;
+        RCLCPP_INFO(this->get_logger(), "Offboard active! Holding ENU position: %.2f %.2f %.2f",
+            vehicle_position_.x(), vehicle_position_.y(), vehicle_position_.z());
+    }
+      
     vehicle_nav_state_ = msg.nav_state;
     // RCLCPP_INFO(this->get_logger(), "Publishing: %f", double(vehicle_nav_state_));
 }
@@ -172,8 +179,8 @@ void Px4Manipulation::targetPoseCallback(const std::shared_ptr<manipulation_msgs
 
   // RCLCPP_INFO(this->get_logger(), "targetPoseCallback()");
 
-  reference_position_.x() = request->pose.position.x;
-  reference_position_.y() = request->pose.position.y;
+  reference_position_.x() = request->pose.position.y;
+  reference_position_.y() = -request->pose.position.x;
   reference_position_.z() = request->pose.position.z;
 
   reference_attitude_.w() = request->pose.orientation.w;
