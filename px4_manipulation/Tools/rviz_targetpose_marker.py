@@ -54,7 +54,7 @@ from manipulation_msgs.srv import SetPose
 class MinimalClientAsync(Node):
 
     def __init__(self):
-        super().__init__('minimal_client_async')
+        super().__init__('minimal_client_async', use_global_arguments=False)
         self.cli = self.create_client(SetPose, '/set_pose')
         while not self.cli.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('service not available, waiting again...')
