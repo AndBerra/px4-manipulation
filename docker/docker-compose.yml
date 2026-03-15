@@ -1,0 +1,21 @@
+services:
+  px4-manipulation:
+    build:
+      context: .
+      dockerfile: Dockerfile   
+      args:
+        ROS_DISTRO: humble
+        PX4_DISTRO: release/1.16
+    image: px4-manipulation:latest
+    container_name: px4-manipulation
+    network_mode: host         
+    stdin_open: true
+    tty: true
+    environment:
+      - ROS_DISTRO=humble
+      - DISPLAY=${DISPLAY}     
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      - ../:/ros2_ws/src/px4-manipulation
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${HOME}/.Xauthority:/root/.Xauthority:rw
