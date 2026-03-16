@@ -2,7 +2,8 @@ from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import DeclareLaunchArgument,IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch_ros.substitutions import FindPackageShare
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from ament_index_python.packages import get_package_share_directory
 import os
 
@@ -16,12 +17,18 @@ def generate_launch_description():
         description='Path to px4_manipulation config yaml inside the package config/ folder'
     )
 
+    config_path = PathJoinSubstitution([
+        FindPackageShare('px4_manipulation'),
+        'config',
+        LaunchConfiguration('config_file')
+    ])
+ 
     manipulation_node = Node(
         package='px4_manipulation',
         namespace='px4_manipulation',
         executable='talker',
         name='sim',
-        parameters=[LaunchConfiguration('config_file')]
+        parameters=[config_path]
     )    
     targetpose_marker = Node(
         package='px4_manipulation',
