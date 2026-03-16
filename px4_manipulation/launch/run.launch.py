@@ -1,15 +1,19 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument,IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration
 from ament_index_python.packages import get_package_share_directory
 import os
 
 def generate_launch_description():
-    params_file = os.path.join(
-        get_package_share_directory('px4_manipulation'),
-        'config',
-        'px4_manipulation.yaml'
+
+    pkg_share = get_package_share_directory('px4_manipulation')
+
+    config_file_arg = DeclareLaunchArgument(
+        'config_file',
+        default_value=os.path.join(pkg_share, 'config', 'px4_manipulation.yaml'),
+        description='Path to px4_manipulation config yaml inside the package config/ folder'
     )
 
     manipulation_node = Node(
@@ -17,7 +21,7 @@ def generate_launch_description():
         namespace='px4_manipulation',
         executable='talker',
         name='sim',
-        parameters=[params_file]
+        parameters=[LaunchConfiguration('config_file')]
     )    
     targetpose_marker = Node(
         package='px4_manipulation',
@@ -34,6 +38,7 @@ def generate_launch_description():
         )
     )
     return LaunchDescription([
+        config_file_arg,
         manipulation_node,
         px4_visualizer,
         targetpose_marker
