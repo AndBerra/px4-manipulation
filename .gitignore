@@ -3,3 +3,10 @@
 build/**
 install/**
 log/**
+
+*.yaml
+*.yml
+*.json
+
+!px4_manipulation/config/px4_manipulation.yaml
+!px4_manipulation/config/example_waypoint.json
