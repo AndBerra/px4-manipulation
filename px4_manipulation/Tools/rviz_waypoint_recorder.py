@@ -148,9 +148,9 @@ class WaypointRecorder:
             text.pose.position.z = z + 0.3   # float above sphere
             text.pose.orientation.w = 1.0
             text.scale.z       = 0.25         # text height
-            text.color.r       = 1.0
-            text.color.g       = 1.0
-            text.color.b       = 1.0
+            text.color.r       = 0.0
+            text.color.g       = 0.0
+            text.color.b       = 0.0
             text.color.a       = 1.0
             text.text          = str(i + 1)
             marker_array.markers.append(text)
