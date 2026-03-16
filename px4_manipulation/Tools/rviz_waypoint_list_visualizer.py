@@ -46,13 +46,8 @@ class WaypointListVisualizer(Node):
         self.get_logger().info(
             f'Loaded {len(self.waypoints)} waypoints from {waypoints_path}')
 
-        # Publish once after a short delay to ensure RViz is ready
-        self._timer = self.create_timer(1.0, self._publish_once)
-
-    def _publish_once(self):
-        self.publish_markers()
-        # Cancel timer after first publish — transient_local handles late subscribers
-        self.destroy_timer(self._timer)
+        # Keep republishing at 1Hz — same approach as recorder
+        self._timer = self.create_timer(1.0, self.publish_markers)
 
     def publish_markers(self):
         marker_array = MarkerArray()
@@ -60,18 +55,18 @@ class WaypointListVisualizer(Node):
 
         # Line strip connecting all waypoints
         if len(self.waypoints) > 1:
-            line             = Marker()
-            # line.header.frame_id = 'map'
+            line                 = Marker()
+            line.header.frame_id = 'map'
             line.header.stamp    = now
-            line.ns          = 'waypoint_path'
-            line.id          = 0
-            line.type        = Marker.LINE_STRIP
-            line.action      = Marker.ADD
-            line.scale.x     = 0.05
-            line.color.r     = 0.0
-            line.color.g     = 1.0
-            line.color.b     = 1.0
-            line.color.a     = 0.8
+            line.ns              = 'waypoint_path'
+            line.id              = 0
+            line.type            = Marker.LINE_STRIP
+            line.action          = Marker.ADD
+            line.scale.x         = 0.05
+            line.color.r         = 0.0
+            line.color.g         = 1.0
+            line.color.b         = 1.0
+            line.color.a         = 0.8
             for wp in self.waypoints:
                 p = Point()
                 p.x = wp['position']['x']
@@ -87,48 +82,47 @@ class WaypointListVisualizer(Node):
             z = wp['position']['z']
 
             # Sphere
-            sphere                   = Marker()
-            sphere.header.frame_id   = 'map'
-            sphere.header.stamp      = now
-            sphere.ns                = 'waypoint_spheres'
-            sphere.id                = i
-            sphere.type              = Marker.SPHERE
-            sphere.action            = Marker.ADD
-            sphere.pose.position.x   = x
-            sphere.pose.position.y   = y
-            sphere.pose.position.z   = z
+            sphere                    = Marker()
+            sphere.header.frame_id    = 'map'
+            sphere.header.stamp       = now
+            sphere.ns                 = 'waypoint_spheres'
+            sphere.id                 = i
+            sphere.type               = Marker.SPHERE
+            sphere.action             = Marker.ADD
+            sphere.pose.position.x    = x
+            sphere.pose.position.y    = y
+            sphere.pose.position.z    = z
             sphere.pose.orientation.w = 1.0
-            sphere.scale.x           = 0.2
-            sphere.scale.y           = 0.2
-            sphere.scale.z           = 0.2
-            sphere.color.r           = 0.2
-            sphere.color.g           = 0.6
-            sphere.color.b           = 1.0
-            sphere.color.a           = 1.0
+            sphere.scale.x            = 0.5
+            sphere.scale.y            = 0.5
+            sphere.scale.z            = 0.5
+            sphere.color.r            = 0.2
+            sphere.color.g            = 0.4
+            sphere.color.b            = 1.0
+            sphere.color.a            = 1.0
             marker_array.markers.append(sphere)
 
             # Text label
-            text                   = Marker()
-            text.header.frame_id   = 'map'
-            text.header.stamp      = now
-            text.ns                = 'waypoint_labels'
-            text.id                = i
-            text.type              = Marker.TEXT_VIEW_FACING
-            text.action            = Marker.ADD
-            text.pose.position.x   = x
-            text.pose.position.y   = y
-            text.pose.position.z   = z + 0.3
+            text                    = Marker()
+            text.header.frame_id    = 'map'
+            text.header.stamp       = now
+            text.ns                 = 'waypoint_labels'
+            text.id                 = i
+            text.type               = Marker.TEXT_VIEW_FACING
+            text.action             = Marker.ADD
+            text.pose.position.x    = x
+            text.pose.position.y    = y
+            text.pose.position.z    = z + 0.5
             text.pose.orientation.w = 1.0
-            text.scale.z           = 0.25
-            text.color.r           = 1.0
-            text.color.g           = 1.0
-            text.color.b           = 1.0
-            text.color.a           = 1.0
-            text.text              = str(i + 1)
+            text.scale.z            = 0.4
+            text.color.r            = 1.0
+            text.color.g            = 1.0
+            text.color.b            = 1.0
+            text.color.a            = 1.0
+            text.text               = str(i + 1)
             marker_array.markers.append(text)
 
         self.publisher_.publish(marker_array)
-        self.get_logger().info(f'Published {len(self.waypoints)} waypoint markers')
 
 
 def main(args=None):
