@@ -8,7 +8,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-
+    pkg_share = get_package_share_directory('px4_manipulation')
 
     # Resolve workspace root from install share path
     waypoints_path_arg = DeclareLaunchArgument(
@@ -23,7 +23,10 @@ def generate_launch_description():
                 get_package_share_directory('px4_offboard'),
                 'visualize.launch.py'
             )
-        )
+        ),
+        launch_arguments={
+            'rviz_config': os.path.join(pkg_share, 'config', 'waypoint_following.rviz'),
+        }.items()
     )
 
     # PX4 manipulation node in waypoint following mode

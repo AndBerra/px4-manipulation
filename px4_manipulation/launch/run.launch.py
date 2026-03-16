@@ -10,7 +10,8 @@ import os
 def generate_launch_description():
 
     pkg_share = get_package_share_directory('px4_manipulation')
-
+    px4_offboard_share = get_package_share_directory('px4_offboard')
+    
     config_file_arg = DeclareLaunchArgument(
         'config_file',
         default_value=os.path.join(pkg_share, 'config', 'px4_manipulation.yaml'),
@@ -38,12 +39,13 @@ def generate_launch_description():
     )
     px4_visualizer = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory('px4_offboard'),
-                'visualize.launch.py'
-            )
-        )
+            os.path.join(px4_offboard_share, 'visualize.launch.py')
+        ),
+        launch_arguments={
+            'rviz_config': os.path.join(pkg_share, 'config', 'run.rviz'),
+        }.items()
     )
+
     return LaunchDescription([
         config_file_arg,
         manipulation_node,
