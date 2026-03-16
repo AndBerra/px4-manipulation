@@ -45,6 +45,7 @@ install(TARGETS
 install(PROGRAMS
   Tools/rviz_targetpose_marker.py
   Tools/rviz_waypoint_recorder.py
+  Tools/rviz_waypoint_list_visualizer.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -122,6 +122,11 @@ void Px4Manipulation::statusloopCallback() {
         loop_counter_++;
     }
 
+    // Advance waypoint sequencing if active
+    if (waypoint_sequencing_running_) {
+        updateWaypointSequencing();
+    }
+
     // Publish attitude setpoints
     if (vehicle_nav_state_ == px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD) {
       // RCLCPP_INFO(this->get_logger(), "publising attitude setpoint");
@@ -141,13 +146,17 @@ void Px4Manipulation::statusloopCallback() {
 void Px4Manipulation::vehicleStatusCallback(const px4_msgs::msg::VehicleStatus &msg) {
     if (msg.nav_state == px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD &&
         vehicle_nav_state_ != px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD) {
-        reference_position_ = vehicle_position_;
-        RCLCPP_INFO(this->get_logger(), "Offboard active! Holding ENU position: %.2f %.2f %.2f",
-            vehicle_position_.x(), vehicle_position_.y(), vehicle_position_.z());
+        
+        if (!waypoint_sequencing_running_) {
+            // Only grab current position in interactive mode
+            reference_position_ = vehicle_position_;
+            RCLCPP_INFO(this->get_logger(), "Offboard active! Holding ENU position: %.2f %.2f %.2f",
+                vehicle_position_.x(), vehicle_position_.y(), vehicle_position_.z());
+        } else {
+            RCLCPP_INFO(this->get_logger(), "Offboard active! Starting waypoint sequencing");
+        }
     }
-      
     vehicle_nav_state_ = msg.nav_state;
-    // RCLCPP_INFO(this->get_logger(), "Publishing: %f", double(vehicle_nav_state_));
 }
 
 void Px4Manipulation::loadWaypointsFromFile(const std::string & path) {

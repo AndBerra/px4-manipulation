@@ -39,8 +39,21 @@ def generate_launch_description():
         }],
     )
 
+    # Waypoint list visualizer — publishes markers to RViz
+    waypoint_visualizer = Node(
+        package='px4_manipulation',
+        executable='rviz_waypoint_list_visualizer.py',
+        name='waypoint_list_visualizer',
+        output='screen',
+        emulate_tty=True,
+        parameters=[{
+            'waypoints_path': LaunchConfiguration('waypoints_path'),
+        }],
+    )
+
     return LaunchDescription([
         waypoints_path_arg,
         px4_visualizer,
         px4_manipulation,
+        waypoint_visualizer,
     ])
