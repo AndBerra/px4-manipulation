@@ -28,9 +28,7 @@ from visualization_msgs.msg import (
 )
 
 
-# Save to config/ folder sitting next to this script in the source tree
-WAYPOINTS_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), '..', 'config', 'waypoints.json')
+
 
 
 # ---------------------------------------------------------------------------
@@ -50,10 +48,11 @@ counter      = 0
 
 class WaypointRecorder:
 
-    def __init__(self, marker_array_pub):
+    def __init__(self, marker_array_pub, waypoints_path: str):
         self.marker_pose       = Pose()
         self.waypoints         = []
         self.marker_array_pub  = marker_array_pub
+        self.waypoints_path    = waypoints_path
 
     # ------------------------------------------------------------------
     # Serialization
@@ -75,11 +74,10 @@ class WaypointRecorder:
         }
 
     def _save(self):
-        path = os.path.realpath(WAYPOINTS_PATH)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, 'w') as f:
+        os.makedirs(os.path.dirname(self.waypoints_path), exist_ok=True)
+        with open(self.waypoints_path, 'w') as f:
             json.dump(self.waypoints, f, indent=2)
-        node.get_logger().info(f'Saved {len(self.waypoints)} waypoints to {path}')
+        node.get_logger().info(f'Saved {len(self.waypoints)} waypoints to {self.waypoints_path}')
 
     # ------------------------------------------------------------------
     # RViz visualization
@@ -330,7 +328,13 @@ if __name__ == '__main__':
 
     marker_array_pub = node.create_publisher(MarkerArray, '/waypoint_markers', 10)
 
-    recorder = WaypointRecorder(marker_array_pub)
+    node.declare_parameter('waypoints_path', '')
+    waypoints_path = node.get_parameter('waypoints_path').get_parameter_value().string_value
+    if not waypoints_path:
+        node.get_logger().error('Parameter "waypoints_path" not set! Set it in the launch file.')
+        sys.exit(1)
+
+    recorder = WaypointRecorder(marker_array_pub, waypoints_path)
     br       = TransformBroadcaster(node)
     node.create_timer(0.01, frameCallback)
     server   = InteractiveMarkerServer(node, 'waypoint_recorder')
@@ -345,7 +349,7 @@ if __name__ == '__main__':
     server.applyChanges()
 
     node.get_logger().info(
-        f'Waypoint recorder ready. Will save to: {os.path.realpath(WAYPOINTS_PATH)}')
+        f'Waypoint recorder ready. Will save to: {waypoints_path}')
 
     rclpy.spin(node)
     server.shutdown()

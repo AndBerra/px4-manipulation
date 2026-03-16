@@ -15,8 +15,14 @@ def generate_launch_description():
     if not os.path.exists(rviz_config):
         rviz_config = '' 
 
-    return LaunchDescription([
+    # wp file path save
+    waypoints_path_arg = DeclareLaunchArgument(
+        'waypoints_path',
+        description='Absolute path to save waypoints.json in the source tree'
+    )
 
+    return LaunchDescription([
+        waypoints_path_arg,
         # Waypoint recorder node
         Node(
             package='px4_manipulation',
@@ -24,6 +30,9 @@ def generate_launch_description():
             name='waypoint_recorder',
             output='screen',
             emulate_tty=True,
+            parameters=[{
+                'waypoints_path': LaunchConfiguration('waypoints_path'),
+            }],            
         ),
 
         # RViz
