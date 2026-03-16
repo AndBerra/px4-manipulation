@@ -8,9 +8,16 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory('px4_manipulation')
 
-    # Resolve workspace root from install share path
+    pkg_share         = get_package_share_directory('px4_manipulation')
+    px4_offboard_share = get_package_share_directory('px4_offboard')
+
+    config_file_arg = DeclareLaunchArgument(
+        'config_file',
+        default_value=os.path.join(pkg_share, 'config', 'px4_manipulation.yaml'),
+        description='Full path to config yaml inside the package config/ folder'
+    )
+
     waypoints_path_arg = DeclareLaunchArgument(
         'waypoints_path',
         description='Absolute path to waypoints.json in the source tree'
@@ -19,10 +26,7 @@ def generate_launch_description():
     # PX4 visualizer — launches RViz + drone pose visualization
     px4_visualizer = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory('px4_offboard'),
-                'visualize.launch.py'
-            )
+            os.path.join(px4_offboard_share, 'visualize.launch.py')
         ),
         launch_arguments={
             'rviz_config': os.path.join(pkg_share, 'config', 'waypoint_following.rviz'),
@@ -36,10 +40,13 @@ def generate_launch_description():
         name='px4_manipulation',
         output='screen',
         emulate_tty=True,
-        parameters=[{
-            'follow_waypoints': True,
-            'waypoints_path':   LaunchConfiguration('waypoints_path'),
-        }],
+        parameters=[
+            LaunchConfiguration('config_file'),
+            {
+                'follow_waypoints': True,
+                'waypoints_path':   LaunchConfiguration('waypoints_path'),
+            }
+        ],
     )
 
     # Waypoint list visualizer — publishes markers to RViz
@@ -55,6 +62,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        config_file_arg,
         waypoints_path_arg,
         px4_visualizer,
         px4_manipulation,
