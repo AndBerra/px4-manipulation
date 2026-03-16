@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     lsb-release \
     python3-rosdep \
     python3-colcon-common-extensions \
+    nlohmann-json3-dev \
     sudo \
  && locale-gen en_US en_US.UTF-8 \
  && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \

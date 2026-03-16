@@ -41,8 +41,10 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <fstream>
 #include <string>
 #include <Eigen/Dense>
+#include <nlohmann/json.hpp>
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
@@ -55,6 +57,7 @@
 #include "px4_msgs/msg/vehicle_local_position.hpp"
 #include "px4_msgs/msg/vehicle_command.hpp"
 #include "manipulation_msgs/srv/set_pose.hpp"
+#include "manipulation_msgs/srv/set_waypoints.hpp"
 
 
 using namespace std::chrono_literals;
@@ -105,6 +108,13 @@ class Px4Manipulation : public rclcpp::Node
     void targetPoseCallback(const std::shared_ptr<manipulation_msgs::srv::SetPose::Request> request,
           std::shared_ptr<manipulation_msgs::srv::SetPose::Response> response);
 
+    /** @brief 
+     * Callback to receive full waypoint list and start sequencing 
+    */
+    void setWaypointsCallback(
+        const std::shared_ptr<manipulation_msgs::srv::SetWaypoints::Request> request,
+        std::shared_ptr<manipulation_msgs::srv::SetWaypoints::Response> response);
+           
     /**
      * @brief Publish a VehicleCommand to PX4
      * @param command  MAVLink command ID
@@ -117,7 +127,17 @@ class Px4Manipulation : public rclcpp::Node
      * @brief Switch to offboard mode
      */
     void setOffboardMode();
-              
+
+    /** @brief 
+     * Check if drone is close enough to current waypoint and advance 
+     */
+    void updateWaypointSequencing();
+ 
+    /** @brief 
+     * Load waypoints from JSON file and start sequencing 
+     */
+    void loadWaypointsFromFile(const std::string & path);
+
     // Timers
     rclcpp::TimerBase::SharedPtr statusloop_timer_;
     
@@ -133,9 +153,10 @@ class Px4Manipulation : public rclcpp::Node
     
     // Services
     rclcpp::Service<manipulation_msgs::srv::SetPose>::SharedPtr pose_service_;
+    rclcpp::Service<manipulation_msgs::srv::SetWaypoints>::SharedPtr waypoints_service_;
 
     // Vehicle state
-    uint8_t vehicle_nav_state_;
+    uint8_t vehicle_nav_state_{0};
     Eigen::Quaterniond vehicle_attitude_{Eigen::Quaterniond(1.0, 0.0, 0.0, 0.0)};
     Eigen::Vector3d vehicle_position_{Eigen::Vector3d(0.0, 0.0, 0.0)};
     Eigen::Vector3d vehicle_velocity_{Eigen::Vector3d(0.0, 0.0, 0.0)};
@@ -144,9 +165,28 @@ class Px4Manipulation : public rclcpp::Node
     Eigen::Vector3d reference_position_{Eigen::Vector3d(0.0, 0.0, 10.0)};
     Eigen::Quaterniond reference_attitude_{Eigen::Quaterniond(1.0, 0.0, 0.0, 0.0)};
 
+    // Waypoint list populated by /set_waypoints
+    std::vector<Eigen::Vector3d> waypoints_;
+    std::vector<Eigen::Quaterniond> waypoint_attitudes_;
+ 
+    // Index of current wp
+    int current_waypoint_idx_{-1};
+ 
+    // True when waypoint sequencing
+    bool waypoint_sequencing_running_{false};
+ 
+    // Distance threshold to consider a waypoint reached (meters)
+    static constexpr double WAYPOINT_ACCEPTANCE_RADIUS{0.3};
+
     // Controller gains    
     double kp_{0.05};
     double kd_{0.05};
+
+    // If true, load waypoints from file on startup and start sequencing 
+    bool follow_waypoints_{false};
+ 
+    // Path to waypoints JSON file
+    std::string waypoints_path_{""};
 
     // Counter for delayed arm/offboard trigger
     int loop_counter_{0};

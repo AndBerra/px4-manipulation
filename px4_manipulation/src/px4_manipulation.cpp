@@ -47,6 +47,8 @@ Px4Manipulation::Px4Manipulation() : Node("minimal_publisher") {
 
     kp_ = this->declare_parameter<double>("kp", kp_);
     kd_ = this->declare_parameter<double>("kd", kd_);
+    follow_waypoints_ = this->declare_parameter<bool>("follow_waypoints", false);
+    waypoints_path_   = this->declare_parameter<std::string>("waypoints_path", "");
 
     // Publishers
     offboard_mode_pub_ = this->create_publisher<px4_msgs::msg::OffboardControlMode>("/fmu/in/offboard_control_mode", qos_profile);
@@ -63,9 +65,22 @@ Px4Manipulation::Px4Manipulation() : Node("minimal_publisher") {
 
     // Services      
     pose_service_ = this->create_service<manipulation_msgs::srv::SetPose>("/set_pose", std::bind(&Px4Manipulation::targetPoseCallback, this, std::placeholders::_1, std::placeholders::_2));
+    waypoints_service_ = this->create_service<manipulation_msgs::srv::SetWaypoints>("/set_waypoints", std::bind(&Px4Manipulation::setWaypointsCallback, this, std::placeholders::_1, std::placeholders::_2));
 
     // Setup loop timers
     statusloop_timer_ = this->create_wall_timer(20ms, std::bind(&Px4Manipulation::statusloopCallback, this));
+
+    // If follow_waypoints is set, load waypoints from file immediately
+    if (follow_waypoints_) {
+        if (waypoints_path_.empty()) {
+            RCLCPP_ERROR(this->get_logger(),
+                "follow_waypoints=true but waypoints_path is not set!");
+        } else {
+            loadWaypointsFromFile(waypoints_path_);
+        }
+    } else {
+        RCLCPP_INFO(this->get_logger(), "Interactive UI mode — waiting for /set_pose commands");
+    }    
 }
 
 
@@ -135,6 +150,83 @@ void Px4Manipulation::vehicleStatusCallback(const px4_msgs::msg::VehicleStatus &
     // RCLCPP_INFO(this->get_logger(), "Publishing: %f", double(vehicle_nav_state_));
 }
 
+void Px4Manipulation::loadWaypointsFromFile(const std::string & path) {
+
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        RCLCPP_ERROR(this->get_logger(), "Cannot open waypoints file: %s", path.c_str());
+        return;
+    }
+
+    nlohmann::json json_waypoints;
+    try {
+        file >> json_waypoints;
+    } catch (const std::exception & e) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to parse waypoints JSON: %s", e.what());
+        return;
+    }
+
+    waypoints_.clear();
+    waypoint_attitudes_.clear();
+
+    for (const auto & wp : json_waypoints) {
+        // JSON waypoints are in standard ENU (X=East, Y=North, Z=Up)
+        // Convert to internal pseudo-ENU (X=North, Y=-East, Z=Up)
+        Eigen::Vector3d pos;
+        pos(0) =  wp["position"]["y"].get<double>();   // North = ENU Y
+        pos(1) = -wp["position"]["x"].get<double>();   // -East = -ENU X
+        pos(2) =  wp["position"]["z"].get<double>();   // Up    = ENU Z
+        waypoints_.push_back(pos);
+
+        Eigen::Quaterniond att(
+            wp["orientation"]["w"].get<double>(),
+            wp["orientation"]["x"].get<double>(),
+            wp["orientation"]["y"].get<double>(),
+            wp["orientation"]["z"].get<double>());
+        waypoint_attitudes_.push_back(att);
+    }
+
+    if (waypoints_.empty()) {
+        RCLCPP_WARN(this->get_logger(), "Waypoints file is empty: %s", path.c_str());
+        return;
+    }
+
+    current_waypoint_idx_ = 0;
+    reference_position_   = waypoints_[0];
+    reference_attitude_   = waypoint_attitudes_[0];
+    waypoint_sequencing_running_        = true;
+
+    RCLCPP_INFO(this->get_logger(), "Loaded %zu waypoints from %s",
+        waypoints_.size(), path.c_str());
+}
+
+void Px4Manipulation::updateWaypointSequencing() {
+
+    if (waypoints_.empty() || current_waypoint_idx_ < 0) {
+        return;
+    }
+
+    // Check distance to current waypoint
+    double dist = (vehicle_position_ - waypoints_[current_waypoint_idx_]).norm();
+
+    if (dist < WAYPOINT_ACCEPTANCE_RADIUS) {
+        int next_idx = current_waypoint_idx_ + 1;
+
+        if (next_idx < static_cast<int>(waypoints_.size())) {
+            // Advance to next waypoint
+            current_waypoint_idx_ = next_idx;
+            reference_position_   = waypoints_[current_waypoint_idx_];
+            reference_attitude_   = waypoint_attitudes_[current_waypoint_idx_];
+            RCLCPP_INFO(this->get_logger(), "Waypoint %d/%zu reached, advancing to next",
+                current_waypoint_idx_, waypoints_.size());
+        } else {
+            // All waypoints completed — hold last position
+            waypoint_sequencing_running_ = false;
+            RCLCPP_INFO(this->get_logger(), "All waypoints completed, holding position");
+        }
+    }
+}
+
 void Px4Manipulation::publishVehicleCommand(uint16_t command, float param1, float param2) {
     px4_msgs::msg::VehicleCommand msg;
     msg.command = command;
@@ -189,4 +281,46 @@ void Px4Manipulation::targetPoseCallback(const std::shared_ptr<manipulation_msgs
   reference_attitude_.z() = request->pose.orientation.z;
 
   response->result = true;
+}
+
+void Px4Manipulation::setWaypointsCallback(
+    const std::shared_ptr<manipulation_msgs::srv::SetWaypoints::Request> request,
+    std::shared_ptr<manipulation_msgs::srv::SetWaypoints::Response> response)
+{
+    if (request->waypoints.empty()) {
+        RCLCPP_WARN(this->get_logger(), "Received empty waypoint list, ignoring");
+        response->result = false;
+        return;
+    }
+
+    // Clear previous waypoints
+    waypoints_.clear();
+    waypoint_attitudes_.clear();
+
+    // Convert each waypoint from UI standard ENU → internal pseudo-ENU
+    for (const auto & wp : request->waypoints) {
+        Eigen::Vector3d pos;
+        pos(0) =  wp.position.y;   // North = ENU Y
+        pos(1) = -wp.position.x;   // -East = -ENU X
+        pos(2) =  wp.position.z;   // Up    = ENU Z
+        waypoints_.push_back(pos);
+
+        Eigen::Quaterniond att(
+            wp.orientation.w,
+            wp.orientation.x,
+            wp.orientation.y,
+            wp.orientation.z);
+        waypoint_attitudes_.push_back(att);
+    }
+
+    // Start sequencing from first waypoint
+    current_waypoint_idx_ = 0;
+    reference_position_   = waypoints_[0];
+    reference_attitude_   = waypoint_attitudes_[0];
+    waypoint_sequencing_running_        = true;
+
+    RCLCPP_INFO(this->get_logger(), "Waypoint execution started: %zu waypoints loaded",
+        waypoints_.size());
+
+    response->result = true;
 }

@@ -13,6 +13,7 @@ endif()
 
 find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3)
+find_package(nlohmann_json REQUIRED)
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -32,6 +33,10 @@ add_executable(talker
 ament_target_dependencies(talker rclcpp std_msgs geometry_msgs px4_msgs manipulation_msgs)
 target_include_directories(talker PUBLIC "${Eigen3_INCLUDE_DIRS}")
 target_link_libraries(talker)
+
+target_link_libraries(talker
+  nlohmann_json::nlohmann_json
+)
 
 install(TARGETS
   talker
