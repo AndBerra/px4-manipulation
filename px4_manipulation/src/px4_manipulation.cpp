@@ -47,6 +47,7 @@ Px4Manipulation::Px4Manipulation() : Node("minimal_publisher") {
 
     kp_ = this->declare_parameter<double>("kp", kp_);
     kd_ = this->declare_parameter<double>("kd", kd_);
+    hover_thrust_ = this->declare_parameter<double>("hover_thrust", hover_thrust_);
     follow_waypoints_ = this->declare_parameter<bool>("follow_waypoints", false);
     waypoints_path_   = this->declare_parameter<std::string>("waypoints_path", "");
 
@@ -92,7 +93,7 @@ void Px4Manipulation::statusloopCallback() {
     // Simple PID position controller
     Eigen::Vector3d error_position = vehicle_position_ - reference_position_;
 
-    Eigen::Vector3d hover_thrust_inertial(0.0, 0.0, 0.2);
+    Eigen::Vector3d hover_thrust_inertial(0.0, 0.0, hover_thrust_);
     Eigen::Vector3d acceleration_feedback = -kp_ * error_position -kd_ * vehicle_velocity_;
 
     /// Compute attitude reference

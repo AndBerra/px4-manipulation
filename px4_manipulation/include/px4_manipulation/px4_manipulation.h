@@ -181,6 +181,7 @@ class Px4Manipulation : public rclcpp::Node
     // Controller gains    
     double kp_{0.05};
     double kd_{0.05};
+    double hover_thrust_{0.2};
 
     // If true, load waypoints from file on startup and start sequencing 
     bool follow_waypoints_{false};

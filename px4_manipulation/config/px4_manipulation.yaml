@@ -3,3 +3,4 @@ px4_manipulation:
     ros__parameters:
       kp: 0.04
       kd: 0.04
+      hover_thrust: 0.2
