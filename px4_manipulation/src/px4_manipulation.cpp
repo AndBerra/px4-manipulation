@@ -93,15 +93,18 @@ void Px4Manipulation::statusloopCallback() {
     // Simple PID position controller
     Eigen::Vector3d error_position = vehicle_position_ - reference_position_;
 
-    Eigen::Vector3d hover_thrust_inertial(0.0, 0.0, hover_thrust_);
     Eigen::Vector3d acceleration_feedback = -kp_ * error_position -kd_ * vehicle_velocity_;
+    
+    // Hover thrust (NED)
+    Eigen::Vector3d hover_thrust_inertial(0.0, 0.0, -hover_thrust_);
 
     /// Compute attitude reference
 
     /// Compute thrust values
     Eigen::Vector3d thrust_inertial = acceleration_feedback + hover_thrust_inertial;
-    thrust_inertial.array().max(1.0);    // Saturate thrust values
-    thrust_inertial.array().min(-1.0);   
+    thrust_inertial = thrust_inertial.cwiseMin(1.0).cwiseMax(-1.0);
+
+    // rotate thrust to body frame (FRD)
     auto R = vehicle_attitude_.normalized().toRotationMatrix();
     Eigen::Vector3d thrust_body = R.transpose() * thrust_inertial;
     
@@ -135,11 +138,11 @@ void Px4Manipulation::statusloopCallback() {
       px4_msgs::msg::VehicleAttitudeSetpoint attitude_setpoint_msg;
       attitude_setpoint_msg.q_d[0] = reference_attitude_.w();
       attitude_setpoint_msg.q_d[1] = reference_attitude_.x();
-      attitude_setpoint_msg.q_d[2] = -reference_attitude_.y();
-      attitude_setpoint_msg.q_d[3] = -reference_attitude_.z();
+      attitude_setpoint_msg.q_d[2] = reference_attitude_.y();
+      attitude_setpoint_msg.q_d[3] = reference_attitude_.z();
       attitude_setpoint_msg.thrust_body[0] = thrust_body(0);
-      attitude_setpoint_msg.thrust_body[1] = -thrust_body(1);
-      attitude_setpoint_msg.thrust_body[2] = -thrust_body(2);
+      attitude_setpoint_msg.thrust_body[1] = thrust_body(1);
+      attitude_setpoint_msg.thrust_body[2] = thrust_body(2);
       vehicle_attitude_pub_->publish(attitude_setpoint_msg);
     }
 }
@@ -180,12 +183,12 @@ void Px4Manipulation::loadWaypointsFromFile(const std::string & path) {
     waypoint_attitudes_.clear();
 
     for (const auto & wp : json_waypoints) {
-        // JSON waypoints are in standard ENU (X=East, Y=North, Z=Up)
-        // Convert to internal pseudo-ENU (X=North, Y=-East, Z=Up)
+        // JSON loading
+        // ENU -> NED
         Eigen::Vector3d pos;
-        pos(0) =  wp["position"]["y"].get<double>();   // North = ENU Y
-        pos(1) = -wp["position"]["x"].get<double>();   // -East = -ENU X
-        pos(2) =  wp["position"]["z"].get<double>();   // Up    = ENU Z
+        pos(0) =  wp["position"]["y"].get<double>();   
+        pos(1) =  wp["position"]["x"].get<double>();   
+        pos(2) = -wp["position"]["z"].get<double>();   
         waypoints_.push_back(pos);
 
         Eigen::Quaterniond att(
@@ -261,19 +264,20 @@ void Px4Manipulation::vehicleAttitudeCallback(const px4_msgs::msg::VehicleAttitu
     ///TODO: Get vehicle attitude
     vehicle_attitude_.w() = msg.q[0];
     vehicle_attitude_.x() = msg.q[1];
-    vehicle_attitude_.y() = -msg.q[2];
-    vehicle_attitude_.z() = -msg.q[3];
+    vehicle_attitude_.y() = msg.q[2];
+    vehicle_attitude_.z() = msg.q[3];
 
 }
 
 void Px4Manipulation::vehicleLocalPositionCallback(const px4_msgs::msg::VehicleLocalPosition &msg) {
     ///TODO: Get vehicle attitude
     vehicle_position_(0) = msg.x;
-    vehicle_position_(1) = -msg.y;
-    vehicle_position_(2) = -msg.z;
+    vehicle_position_(1) = msg.y;
+    vehicle_position_(2) = msg.z;
+
     vehicle_velocity_(0) = msg.vx;
-    vehicle_velocity_(1) = -msg.vy;
-    vehicle_velocity_(2) = -msg.vz;
+    vehicle_velocity_(1) = msg.vy;
+    vehicle_velocity_(2) = msg.vz;
 }
 
 void Px4Manipulation::targetPoseCallback(const std::shared_ptr<manipulation_msgs::srv::SetPose::Request> request,
@@ -281,14 +285,15 @@ void Px4Manipulation::targetPoseCallback(const std::shared_ptr<manipulation_msgs
 
   // RCLCPP_INFO(this->get_logger(), "targetPoseCallback()");
 
+  // ENU -> NED
   reference_position_.x() = request->pose.position.y;
-  reference_position_.y() = -request->pose.position.x;
-  reference_position_.z() = request->pose.position.z;
+  reference_position_.y() = request->pose.position.x;
+  reference_position_.z() = -request->pose.position.z;
 
   reference_attitude_.w() = request->pose.orientation.w;
   reference_attitude_.x() = request->pose.orientation.x;
-  reference_attitude_.y() = request->pose.orientation.y;
-  reference_attitude_.z() = request->pose.orientation.z;
+  reference_attitude_.y() = -request->pose.orientation.y;
+  reference_attitude_.z() = -request->pose.orientation.z;
 
   response->result = true;
 }
@@ -307,19 +312,19 @@ void Px4Manipulation::setWaypointsCallback(
     waypoints_.clear();
     waypoint_attitudes_.clear();
 
-    // Convert each waypoint from UI standard ENU → internal pseudo-ENU
+     // ENU -> NED
     for (const auto & wp : request->waypoints) {
         Eigen::Vector3d pos;
-        pos(0) =  wp.position.y;   // North = ENU Y
-        pos(1) = -wp.position.x;   // -East = -ENU X
-        pos(2) =  wp.position.z;   // Up    = ENU Z
+        pos(0) =  wp.position.y;  
+        pos(1) =  wp.position.x;   
+        pos(2) =  -wp.position.z;   
         waypoints_.push_back(pos);
 
         Eigen::Quaterniond att(
             wp.orientation.w,
             wp.orientation.x,
-            wp.orientation.y,
-            wp.orientation.z);
+            -wp.orientation.y,
+            -wp.orientation.z);
         waypoint_attitudes_.push_back(att);
     }
 
